@@ -1,14 +1,14 @@
-from bottle import route, run
+from bottle import route, run, static_file
 import sys
 import threading
 import time
-import queue
+import Queue
 import spotify
 
 s = spotify.Session()
 l = spotify.EventLoop(s)
 l.start()
-a = spotify.PortAudioSink(s)
+a = spotify.AlsaSink(s)
 logged_in = threading.Event()
 end_of_track = threading.Event()
 
@@ -44,7 +44,7 @@ def spotify_thread():
             pass
 
 st = threading.Thread(name='spotify_player', target=spotify_thread)
-q = queue.Queue()
+q = Queue.Queue()
 current_track = None
 
 @route('/queue/<id>')
@@ -68,7 +68,11 @@ def get_current():
 
 @route('/')
 def index():
-    return static_file('index.html', root='/site')
+    return static_file('index.html', root='site')
+
+@route('/site/:filename#.*#')
+def send_static(filename):
+    return static_file(filename, root='site/')
 
 st.start()
 run(ded=True)

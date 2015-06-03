@@ -1,16 +1,14 @@
-from flask import Flask, jsonify
+from bottle import route, run
 import sys
 import threading
 import time
-import Queue
+import queue
 import spotify
-
-app = Flask(__name__)
 
 s = spotify.Session()
 l = spotify.EventLoop(s)
 l.start()
-a = spotify.AlsaSink(s)
+a = spotify.PortAudioSink(s)
 logged_in = threading.Event()
 end_of_track = threading.Event()
 
@@ -42,36 +40,35 @@ def spotify_thread():
         s.player.play()
         global current_track
         current_track = t
-        while not end_of_track.wait(0.1):
+        while not end_of_track.wait(0.4):
             pass
 
 st = threading.Thread(name='spotify_player', target=spotify_thread)
-q = Queue.Queue()
+q = queue.Queue()
 current_track = None
 
-st.start()
-
-
-@app.route('/queue/<id>')
+@route('/queue/<id>')
 def queue(id):
     t = s.get_track(id).load()
     q.put(t)
     return 'OK'
 
-@app.route('/queue')
+@route('/queue')
 def get_queue():
     if current_track != None:
-        current = {'artist': current_track.load().artists[0].load().name, 'name': current_track.load().name}
+        current = current_track.link.uri
     else:
         current = None
-    queue = [{'artist':n.load().artists[0].load().name, 'name':n.load().name} for n in q.queue]
-    return jsonify({'current': current,'queue':queue})
+    queue = [n.link.uri for n in q.queue]
+    return {'current': current,'queue':queue}
 
-@app.route('/current')
+@route('/current')
 def get_current():
-    return jsonify({
-        'artist': current_track.load().artists[0].load().name,
-        'name': current_track.load().name})
+    return str(current_track)
 
-if __name__ == '__main__':
-    app.run(debug=True)
+@route('/')
+def index():
+    return static_file('index.html', root='/site')
+
+st.start()
+run(ded=True)

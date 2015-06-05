@@ -1,16 +1,18 @@
-from bottle import route, run, static_file
+from bottle import route, run, static_file, redirect
 import sys
 import threading
 import time
-import Queue
+import queue
 import spotify
+import random
 
 s = spotify.Session()
 l = spotify.EventLoop(s)
 l.start()
-a = spotify.AlsaSink(s)
+a = spotify.PortAudioSink(s)
 logged_in = threading.Event()
 end_of_track = threading.Event()
+music_paused = threading.Event()
 
 def on_connection_state_updated(session):
     if session.connection.state is spotify.ConnectionState.LOGGED_IN:
@@ -18,6 +20,9 @@ def on_connection_state_updated(session):
 
 def on_end_of_track(self):
     end_of_track.set()
+
+def music_paused(session):
+    session.player.play()
 
 s.on(
     spotify.SessionEvent.CONNECTION_STATE_UPDATED,
@@ -27,31 +32,45 @@ s.on(
     spotify.SessionEvent.END_OF_TRACK, on_end_of_track
 )
 
+s.on(
+    spotify.SessionEvent.PLAY_TOKEN_LOST, music_paused
+)
+
 s.relogin()
 
 logged_in.wait()
 
 def spotify_thread():
+    global current_track
     while True:
-        while q.empty():
-            pass
+        if q.empty():
+            if p:
+                add_random_track_from_playlist(p)
+            else:
+                continue
         t = q.get().load()
         s.player.load(t)
         s.player.play()
-        global current_track
+        end_of_track.clear()
         current_track = t
         while not end_of_track.wait(0.4):
             pass
+        q.task_done()
 
 st = threading.Thread(name='spotify_player', target=spotify_thread)
-q = Queue.Queue()
+st.daemon = True
+q = queue.Queue()
+p = None
 current_track = None
+
+def add_random_track_from_playlist(p):
+    q.put(random.choice(p.tracks))    
 
 @route('/queue/<id>')
 def queue(id):
-    t = s.get_track(id).load()
+    t = s.get_track(id)
     q.put(t)
-    return 'OK'
+    return redirect('/')
 
 @route('/queue')
 def get_queue():
@@ -62,9 +81,10 @@ def get_queue():
     queue = [n.link.uri for n in q.queue]
     return {'current': current,'queue':queue}
 
-@route('/current')
-def get_current():
-    return str(current_track)
+@route('/set_playlist/<id>')
+def set_playlist(id):
+    global p
+    p = s.get_playlist(id).load()
 
 @route('/')
 def index():

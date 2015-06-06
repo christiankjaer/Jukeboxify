@@ -111,15 +111,20 @@ var Track = React.createClass({
     },
     handleClick: function(event) {
         $.ajax('queue/' + this.props.uri);
+        $(React.findDOMNode(this)).fadeOut(1000);
     }
 });
 var SearchResult = React.createClass({
     render: function() {
-        var boxes = this.props.tracks.map(function(track, index) {
-            return(
-                <Track imgurl={track.album.images[2].url} artist={track.artists[0].name} title={track.name} uri={track.uri} key={index}/>
-            );
-        });
+        if (this.props.tracks.length > 0) {
+            var boxes = this.props.tracks.map(function(track, index) {
+                return(
+                    <Track imgurl={track.album.images[2].url} artist={track.artists[0].name} title={track.name} uri={track.uri} key={index}/>
+                );
+            });
+        } else {
+            return <h2>Nothing found</h2>;
+        }
         return (
             <table className="table">
                 <tbody>
@@ -136,7 +141,7 @@ var SearchBox = React.createClass({
             $.ajax({
                 url: 'https://api.spotify.com/v1/search',
                 dataType: 'json',
-                data: {q: query, type: 'track'},
+                data: {q: query, type: 'track', market: 'DK'},
                 cache: false,
                 success: function(data) {
                     this.setState({tracks: data.tracks.items});
@@ -197,10 +202,10 @@ React.render(
             </div>
         </nav>
         <div className="row">
-            <div className="col-md-8">
+            <div className="col-sm-8">
                 <SearchBox />
             </div>
-            <div className="col-md-4">
+            <div className="col-sm-4">
                 <NowPlayingBox pollInterval={2000}/>
             </div>
         </div>

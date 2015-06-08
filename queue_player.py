@@ -5,6 +5,7 @@ import time
 import queue
 import spotify
 import random
+import getpass
 
 s = spotify.Session()
 l = spotify.EventLoop(s)
@@ -34,10 +35,20 @@ s.on(
 s.on(
     spotify.SessionEvent.PLAY_TOKEN_LOST, music_hijacked
 )
+for i in range(10):
+    try:
+        s.relogin()
+        logged_in.wait()
+        break
+    except:
+        username = input('username: ')
+        password = getpass.getpass('password: ')
+        s.login(username, password, remember_me=True)
+        time.sleep(1)
+        s.logout()
+        time.sleep(1)
+        continue
 
-s.relogin()
-
-logged_in.wait()
 
 def spotify_thread():
     global current_track
